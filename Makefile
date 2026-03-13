@@ -1,4 +1,4 @@
-.PHONY: install run test lint format
+.PHONY: install run test lint format docker-build docker-run
 
 install:
 	python3 -m pip install -e ".[dev]"
@@ -14,3 +14,12 @@ lint:
 
 format:
 	ruff check . --fix
+
+docker-build:
+	docker build -t openstack-vm-lifecycle-api:latest .
+
+docker-run:
+	docker run --rm -p 8000:8000 \
+		-e APP_DB_PATH=/data/vms.db \
+		-v "$(PWD)/data:/data" \
+		openstack-vm-lifecycle-api:latest

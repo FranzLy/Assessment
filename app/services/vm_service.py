@@ -7,26 +7,25 @@ from uuid import uuid4
 from app.clients.openstack import OpenStackClient
 from app.domain.errors import InvalidStateTransitionError, VMNotFoundError
 from app.domain.models import VM, VMCreateRequest, VMStatus
+from app.repositories.vm_repository import VMRepository
 
 
 class VMService:
-    def __init__(self, openstack_client: OpenStackClient):
+    def __init__(self, openstack_client: OpenStackClient, repository: VMRepository):
         self._openstack = openstack_client
-        self._store: dict[str, VM] = {}
+        self._repository = repository
         self._lock = Lock()
 
     def create_vm(self, req: VMCreateRequest) -> VM:
         vm = VM.new(str(uuid4()), req)
         self._openstack.create_server(vm)
-        with self._lock:
-            self._store[vm.id] = vm
-        return vm
+        return self._repository.save(vm)
 
     def list_vms(self) -> list[VM]:
-        return list(self._store.values())
+        return self._repository.list()
 
     def get_vm(self, vm_id: str) -> VM:
-        vm = self._store.get(vm_id)
+        vm = self._repository.get(vm_id)
         if vm is None:
             raise VMNotFoundError(f"vm_id={vm_id} not found")
         return vm
@@ -70,10 +69,9 @@ class VMService:
 
     def _update_status(self, vm_id: str, status: VMStatus) -> VM:
         with self._lock:
-            vm = self._store.get(vm_id)
+            vm = self._repository.get(vm_id)
             if vm is None:
                 raise VMNotFoundError(f"vm_id={vm_id} not found")
             vm.status = status
             vm.updated_at = datetime.now(timezone.utc)
-            self._store[vm_id] = vm
-            return vm
+            return self._repository.save(vm)

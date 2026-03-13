@@ -18,8 +18,10 @@ It is designed to demonstrate API design, Python engineering fundamentals, SDLC 
   - Reboot VM
   - Delete VM
 - Health check endpoint.
-- In-memory state store for PoC.
+- SQLite persistent state store for PoC.
 - OpenStack adapter abstraction with mock implementation.
+- Optional API key auth (`X-API-Key`).
+- Basic observability (`X-Request-ID`, request metrics endpoint).
 - Basic automated tests.
 
 ## Project Structure
@@ -30,6 +32,8 @@ It is designed to demonstrate API design, Python engineering fundamentals, SDLC 
 │   │   └── routes.py
 │   ├── clients
 │   │   └── openstack.py
+│   ├── repositories
+│   │   └── vm_repository.py
 │   ├── domain
 │   │   ├── errors.py
 │   │   └── models.py
@@ -37,6 +41,8 @@ It is designed to demonstrate API design, Python engineering fundamentals, SDLC 
 │   │   └── vm_service.py
 │   ├── config.py
 │   ├── logging_config.py
+│   ├── observability.py
+│   ├── security.py
 │   └── main.py
 ├── docs
 │   ├── ARCHITECTURE.md
@@ -45,6 +51,8 @@ It is designed to demonstrate API design, Python engineering fundamentals, SDLC 
 │   ├── conftest.py
 │   └── test_vm_api.py
 ├── .env.example
+├── .dockerignore
+├── Dockerfile
 ├── Makefile
 └── pyproject.toml
 ```
@@ -74,6 +82,19 @@ Swagger UI: `http://localhost:8000/docs`
 make test
 ```
 
+## Run with Docker
+### 1) Build image
+```bash
+make docker-build
+```
+
+### 2) Run container
+```bash
+make docker-run
+```
+
+The SQLite DB is persisted to local `./data` via a bind mount.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -86,6 +107,7 @@ make test
 | POST | `/v1/vms/{vm_id}/stop` | Stop VM |
 | POST | `/v1/vms/{vm_id}/reboot` | Reboot VM |
 | DELETE | `/v1/vms/{vm_id}` | Delete VM |
+| GET | `/v1/metrics` | Basic service metrics |
 
 ## Example Calls
 ### Create VM
@@ -106,15 +128,36 @@ curl -X POST http://localhost:8000/v1/vms \
 curl -X POST http://localhost:8000/v1/vms/<vm_id>/start
 ```
 
+## Authentication
+Set:
+- `APP_AUTH_ENABLED=true`
+- `APP_API_KEY=<your-secret>`
+
+Then pass header for protected endpoints:
+```bash
+curl -H "X-API-Key: <your-secret>" http://localhost:8000/v1/vms
+```
+
+`/v1/healthz` remains open for liveness checks.
+
+## Persistence
+VM records are stored in SQLite (`APP_DB_PATH`, default `data/vms.db`), so data survives API restarts.
+
+## Observability
+- Response header: `X-Request-ID`
+- Request logs include method/path/status/duration.
+- Metrics endpoint: `GET /v1/metrics`
+
 ## Error Handling
 - `404 Not Found`: VM does not exist.
 - `409 Conflict`: invalid lifecycle transition for current VM state.
+- `401 Unauthorized`: missing/invalid API key when auth is enabled.
 
 ## Design Decisions
 - Synchronous REST API for faster PoC delivery and easier demonstration.
 - Domain/service separation to isolate lifecycle rules.
 - Adapter pattern for OpenStack integration to keep vendor-specific code isolated.
-- In-memory storage for timeboxed delivery; planned upgrade to persistent store.
+- SQLite storage for lightweight persistence and demo reliability.
 
 Detailed architecture notes are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).  
 Backlog and roadmap are in [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -127,7 +170,8 @@ Backlog and roadmap are in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 ## Limitations (PoC)
 - No real OpenStack auth or tenant scoping.
 - No async orchestration for long-running operations.
-- No durable persistence across service restarts.
+- API key auth is static and intended for PoC only.
+- Metrics are process-local and reset on restart.
 
 ## Next Steps
 - Integrate real OpenStack SDK calls in `app/clients/openstack.py`.

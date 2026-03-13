@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.domain.models import VM, VMCreateRequest
+from app.security import require_api_key
 from app.services.vm_service import VMService
 
 router = APIRouter(prefix="/v1", tags=["vms"])
@@ -18,35 +19,40 @@ def healthcheck() -> dict[str, str]:
 
 
 @router.post("/vms", response_model=VM, status_code=status.HTTP_201_CREATED)
-def create_vm(payload: VMCreateRequest, request: Request) -> VM:
+def create_vm(payload: VMCreateRequest, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).create_vm(payload)
 
 
 @router.get("/vms", response_model=list[VM])
-def list_vms(request: Request) -> list[VM]:
+def list_vms(request: Request, _: None = Depends(require_api_key)) -> list[VM]:
     return _svc(request).list_vms()
 
 
 @router.get("/vms/{vm_id}", response_model=VM)
-def get_vm(vm_id: str, request: Request) -> VM:
+def get_vm(vm_id: str, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).get_vm(vm_id)
 
 
 @router.post("/vms/{vm_id}/start", response_model=VM)
-def start_vm(vm_id: str, request: Request) -> VM:
+def start_vm(vm_id: str, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).start_vm(vm_id)
 
 
 @router.post("/vms/{vm_id}/stop", response_model=VM)
-def stop_vm(vm_id: str, request: Request) -> VM:
+def stop_vm(vm_id: str, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).stop_vm(vm_id)
 
 
 @router.post("/vms/{vm_id}/reboot", response_model=VM)
-def reboot_vm(vm_id: str, request: Request) -> VM:
+def reboot_vm(vm_id: str, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).reboot_vm(vm_id)
 
 
 @router.delete("/vms/{vm_id}", response_model=VM)
-def delete_vm(vm_id: str, request: Request) -> VM:
+def delete_vm(vm_id: str, request: Request, _: None = Depends(require_api_key)) -> VM:
     return _svc(request).delete_vm(vm_id)
+
+
+@router.get("/metrics", tags=["observability"])
+def metrics(request: Request, _: None = Depends(require_api_key)) -> dict[str, object]:
+    return request.app.state.metrics.snapshot()
